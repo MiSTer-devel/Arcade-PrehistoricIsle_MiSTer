@@ -45,7 +45,7 @@ module arcade_video #(parameter WIDTH=320, DW=8, GAMMA=1)
 	output        VGA_HS,
 	output        VGA_VS,
 	output        VGA_DE,
-	output  [2:0] VGA_SL,
+	output  [1:0] VGA_SL,
 
 	input   [2:0] fx,
 	input         forced_scandoubler,
@@ -99,6 +99,11 @@ generate
 		assign G = {RGB_fix[7:4],RGB_fix[7:4]};
 		assign B = {RGB_fix[3:0],RGB_fix[3:0]};
 	end
+	else if(DW == 18) begin
+		assign R = {RGB_fix[17:12],RGB_fix[17:16]};
+		assign G = {RGB_fix[11: 6],RGB_fix[11:10]};
+		assign B = {RGB_fix[ 5: 0],RGB_fix[ 5: 4]};
+	end
 	else begin // 24
 		assign R = RGB_fix[23:16];
 		assign G = RGB_fix[15:8];
@@ -106,7 +111,7 @@ generate
 	end
 endgenerate
 
-assign VGA_SL  = sl[2:0];
+assign VGA_SL  = sl[1:0];
 wire [2:0] sl = fx ? fx - 1'd1 : 3'd0;
 wire scandoubler = fx || forced_scandoubler;
 
@@ -237,7 +242,7 @@ end
 
 reg [1:0] i_fb,o_fb;
 always @(posedge CLK_VIDEO) begin
-	reg old_vbl,old_vs;
+	reg old_vbl,old_vs,ready;
 	old_vbl <= FB_VBL;
 	old_vs <= VGA_VS;
 
@@ -246,8 +251,15 @@ always @(posedge CLK_VIDEO) begin
 		if(~old_vs & VGA_VS)  i_fb<={1'b0,~i_fb[0]};
 	end
 	else begin
-		if(~old_vbl & FB_VBL) o_fb<=buf_next(o_fb,i_fb);
-		if(~old_vs & VGA_VS)  i_fb<=buf_next(i_fb,o_fb);
+		if(~old_vs & VGA_VS) begin
+			i_fb<=buf_next(i_fb,o_fb);
+			ready<=1;
+		end
+		if(~old_vbl & FB_VBL) begin
+			if(~old_vs & VGA_VS) o_fb<=i_fb;                // frame finished on this same clock
+			else if(ready)       o_fb<=buf_next(o_fb,i_fb); // newest finished frame, otherwise repeat
+			ready<=0;
+		end
 	end
 end
 

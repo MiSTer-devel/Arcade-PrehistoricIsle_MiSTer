@@ -1,28 +1,60 @@
 
 # SNK M68000 (Prehistoric Isle) FPGA Implementation
 
-FPGA compatible core of SNK M68000 (Prehistoric Isle in 1930 based) arcade hardware for [**MiSTerFPGA**](https://github.com/MiSTer-devel/Main_MiSTer/wiki) written by **Erin Olafson** with assistance from [**atrac17**](https://github.com/atrac17).
+FPGA compatible core of SNK M68000 (Prehistoric Isle in 1930 based) arcade hardware for [**MiSTerFPGA**](https://github.com/MiSTer-devel/Main_MiSTer/wiki) written by **Erin Olafson** with assistance from [**atrac17**](https://github.com/atrac17). Maintenance and miscellaneous quality of life features added by TheJesusfish.
 
 The intent is for this core to be a 1:1 playable implementation of Prehistoric Isle in 1930 arcade hardware. Pending PCB verification, on loan from [**XtraSmiley**](https://twitter.com/Xtrasmiley).
 
+**Note:** This core appends `[MD]` to the end of MRA names so that they can live alongside the legacy version of the core.
+
 <img width="" height="" src="https://github.com/va7deo/PrehistoricIsle/assets/32810066/f206a42f-416a-455d-8359-8d2549b0ed8a">
+
+Button layout (changed from the previous release, so controller maps saved for these setnames need to be redone):
+
+| Button | Default | Function |
+|---|---|---|
+| Shoot | A | PUSH 1 |
+| Option | B | PUSH 2 |
+| Start | Start | 1P / 2P Start (controller 1 / 2) |
+| Coin | Select | Coin 1 / Coin 2 (controller 1 / 2) |
+| Pause | R | Pause |
+| Save States | L | hold for save-state controls |
+
+Button names are from the control panel figure of the game's manual (`doc/Prehisle Manual.pdf`, p.3: PUSH 1 SHOOT, PUSH 2 OPTION). The game uses two buttons; the JAMMA third button input is still read from the keyboard (Space / Q) as before.
+
+DIP switches: MAME 0.288 for all sets, with these differences taken from the game itself:
+
+- **Prehistoric Isle in 1930 (US)**: Coinage as on the US manual's DIP sheet (Free Play, 1 Coin/2 Credits, 2 Coins/1 Credit, 1 Coin/1 Credit), which is how the US program decodes the switches.
+- The US manual lists Bonus Life "100000/150000"; the game's bonus table (all sets) gives 100K / 200K as MAME says, so MAME's label is kept.
+
+Note: the US set keeps a separate credit count for each side: Coin 1 (controller 1's Select, key 5) credits player 1 and Coin 2 (controller 2's Select, key 6) credits player 2.
+
+Save states restore the game exactly. The YM3812's internal timer and envelope counters are not saved (they are inside the jtopl module): its registers are restored, so the music continues, but notes that are sounding restart their envelopes, a note that is fading out is not heard again, and the music tempo phase may shift by up to one timer tick. A sampled sound effect (µPD7759) that was playing when the state was saved is not resumed: the rest of that effect is lost, and later effects play normally. The sound CPU's HALT state is not saved; the sound program (the same ROM in all five sets) never executes HALT.
+
+A save made in the Native refresh mode near the end of a frame records a line that the shorter NTSC frame does not have. Such a save is not restored while Refresh Rate is NTSC (OSD message "Restore needs Native refresh"); switch to Native to restore it. A save interrupted by a reset leaves its slot empty rather than holding a partial state.
+
+Checked against the game itself (MAME 0.288 traces of all five sets, attract and play): the Player 1 control-inversion register ($0F0046) is only ever written with 0, and the four scroll registers only as full 16-bit words, so the core's handling of both registers gives the same result as MAME's for everything the program writes.
+
+High-score file: MiSTer Main pads an `.nvm` file shorter than the table (84 bytes) with zeros and sends it as a complete table, so a truncated file is restored with zeros in its missing part; the core cannot tell the padding from real data. Delete such a file to start again from the game's own table.
 
 ## External Modules
 
-| Module                                                                             | Function                                                               | Author                                         |
-|------------------------------------------------------------------------------------|------------------------------------------------------------------------|------------------------------------------------|
-| [**fx68k**](https://github.com/ijor/fx68k)                                         | [**Motorola 68000 CPU**](https://en.wikipedia.org/wiki/Motorola_68000) | Jorge Cwik                                     |
-| [**t80**](https://opencores.org/projects/t80)                                      | [**Zilog Z80 CPU**](https://en.wikipedia.org/wiki/Zilog_Z80)           | Daniel Wallner                                 |
-| [**jtopl2**](https://github.com/jotego/jtopl)                                      | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2)      | Jose Tejada                                    |
-| [**jt7759**](https://github.com/jotego/jt7759)                                     | [**NEC µPD7759**](https://github.com/jotego/jt7759)                    | Jose Tejada                                    |
-| [**yc_out**](https://github.com/MikeS11/MiSTerFPGA_YC_Encoder)                     | [**Y/C Video Module**](https://en.wikipedia.org/wiki/S-Video)          | Mike Simone                                    |
-| [**mem**](https://github.com/MiSTer-devel/Arcade-Rygar_MiSTer/tree/master/src/mem) | SDRAM Controller / Rom Downloader                                      | Josh Bassett, modified by Erin Olafson       |
-| [**core_template**](https://github.com/MiSTer-devel/Template_MiSTer)               | MiSTer Framework Template                                              | sorgelig, modified by Erin Olafson / atrac17 |
+| Module | Function | Source (commit) | Author |
+|---|---|---|---|
+| [**fx68k**](https://github.com/ijor/fx68k) | [**Motorola 68000 CPU**](https://en.wikipedia.org/wiki/Motorola_68000) | ijor/fx68k @ 0602ee4 | Jorge Cwik |
+| [**T80**](https://github.com/MiSTer-devel/NeoGeo_MiSTer/tree/master/rtl/cpu/T80) | [**Zilog Z80 CPU**](https://en.wikipedia.org/wiki/Zilog_Z80) | MiSTer-devel/NeoGeo_MiSTer rtl/cpu/T80 @ 90a8350 | Daniel Wallner, MiSTer changes by Sorgelig |
+| [**jtopl2**](https://github.com/jotego/jtopl) | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2) | jotego/jtopl @ d3e73f1 (jtopl_reg_ch.v: channel feedback cleared on reset for the MD version) | Jose Tejada |
+| [**jt7759**](https://github.com/jotego/jt7759) | [**NEC µPD7759**](https://github.com/jotego/jt7759) | jotego/jt7759 @ 94b472c | Jose Tejada |
+| [**mem**](https://github.com/MiSTer-devel/Arcade-Rygar_MiSTer/tree/master/src/mem) | SDRAM Controller / Rom Downloader | Arcade-Rygar_MiSTer src/mem | Josh Bassett, modified by Erin Olafson (for the MD version: SDRAM read capture, start-up refresh counter and write data release; download buffer counter wrap and reset between ROM downloads) |
+| [**pause**](https://github.com/JimmyStones/Pause_MiSTer) | Pause handling | Pause_MiSTer v0002 | Jim Gregory |
+| [**save states**](https://github.com/MiSTer-devel/Arcade-TaitoF2_MiSTer) | Save-state stream, DDR3 interface, save-state UI (`rtl/savestate/`) | Arcade-TaitoF2_MiSTer @ 9438df9 | Martin Donlon |
+| [**core_template**](https://github.com/MiSTer-devel/Template_MiSTer) | MiSTer Framework Template | Template_MiSTer @ d6324f2 | sorgelig and contributors |
+
+The save-state sequencer and the high-score module of this core are modelled on Arcade-TaitoF2_MiSTer (save states) and Arcade-RaizingMD_MiSTer / Arcade-IGSPGM_MiSTer (NVRAM high scores).
 
 # Known Issues / Tasks
 
-- [**OPL2 Audio**](https://github.com/jotego/jtopl/issues/11)  **[Issue]**  
-- Timing issues with jtframe_mixer module; false paths added to sdc (may need refactor?)  **[Task]**  
+- Nothing as of right now
 
 # PCB Check List
 
@@ -92,9 +124,9 @@ FPGA implementation loosely based on [**mame source**](https://github.com/mamede
 
 ### Scandoubler Options
 
-- Additional toggle to enable the scandoubler without changing ini settings and new scanline option for 100% is available, this draws a black line every other frame. Below is an example.
+- Additional toggle to enable the scandoubler without changing ini settings. Below is an example of the scanline settings.
 
-<table><tr><th>Scandoubler Fx</th><th>Scanlines 25%</th><th>Scanlines 50%</th><th>Scanlines 75%</th><th>Scanlines 100%</th><tr><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252689-acfb3610-89d9-4ec2-9f69-dc285d9cf6dd.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252701-2cd221dd-0e31-49c3-89ef-e0dcafdd4916.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252717-b4f7bd03-5e76-4e43-b055-1a418589a169.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252728-638d1a44-07ff-4060-918f-ebfb79a6f206.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252737-be45e006-c172-471a-80dd-ee1335cd8ede.png"></td></tr></table>
+<table><tr><th>Scandoubler Fx</th><th>Scanlines 25%</th><th>Scanlines 50%</th><th>Scanlines 75%</th><tr><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252689-acfb3610-89d9-4ec2-9f69-dc285d9cf6dd.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252701-2cd221dd-0e31-49c3-89ef-e0dcafdd4916.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252717-b4f7bd03-5e76-4e43-b055-1a418589a169.png"></td><td><br> <p align="center"><img width="128" height="112" src="https://user-images.githubusercontent.com/32810066/191252728-638d1a44-07ff-4060-918f-ebfb79a6f206.png"></td></tr></table>
 
 # PCB Information / Control Layout
 
